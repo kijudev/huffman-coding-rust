@@ -14,7 +14,7 @@
       };
     in
     {
-      devShells.${system}.default = {
+      devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           cargo
           rustc
