@@ -97,13 +97,64 @@ pub fn construct_encoder(tree: &Tree) -> HashMap<char, Vec<bool>> {
     encoder
 }
 
-pub fn string_from_code(code: &Vec<bool>) -> str {}
+pub fn encode(encoder: &HashMap<char, Vec<bool>>, data: &String) -> String {
+    let mut output = String::new();
+    let mut bit_count: u64 = 0;
+    let mut current_byte: u8 = 0;
+
+    data.chars().for_each(|c| {
+        let code = encoder.get(&c).unwrap();
+
+        code.iter().for_each(|x| {
+            println!("{:?}", bit_count);
+            current_byte |= (if *x { 1u8 } else { 0u8 }) << (bit_count % 8);
+            bit_count += 1;
+
+            if bit_count % 8 == 0 {
+                output.push(current_byte as char);
+                current_byte = 0;
+            }
+        });
+    });
+
+    output
+}
+
+pub fn decode(tree: &Tree, data: &String) -> String {
+    let mut output = String::new();
+    let mut current_tree = tree.clone();
+
+    for byte in data.as_bytes() {
+        for i in (0..8).rev() {
+            let is_set = ((byte >> i) & 1) == 1;
+
+            match current_tree {
+                Tree::Leaf { token, .. } => {
+                    output.push(token);
+                    current_tree = tree.clone();
+                }
+                Tree::Node { left, right, .. } => {
+                    if is_set {
+                        current_tree = right.as_ref().clone();
+                    } else {
+                        current_tree = left.as_ref().clone();
+                    }
+                }
+            }
+        }
+    }
+
+    output
+}
 
 fn main() {
     let data = fs::read_to_string("./src/data.txt").unwrap();
     let freqs = construct_freqs(&data);
     let tree = construct_huffman_tree(&freqs);
     let encoder = construct_encoder(&tree);
+    let output = encode(&encoder, &data);
 
-    println!("{:?}", encoder);
+    let decoded = decode(&tree, &data);
+
+    println!("{:?}", decoded);
 }
