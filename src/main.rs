@@ -1,4 +1,5 @@
 mod huffman_v1;
+mod huffman_v2;
 
 fn main() {
     let msg = String::from(
