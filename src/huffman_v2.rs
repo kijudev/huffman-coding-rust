@@ -4,6 +4,8 @@ use std::{
     hash::Hash,
 };
 
+use serde::{Deserialize, Serialize};
+
 use bitvec::vec::BitVec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +28,12 @@ impl<T: Clone> Tree<T> {
             Tree::Node { freq, .. } => *freq,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncodedMessage<T: Clone + Hash + Eq> {
+    freqs: HashMap<T, u64>,
+    message: BitVec,
 }
 
 impl<T: Clone + Eq> Ord for Tree<T> {
@@ -98,26 +106,26 @@ pub fn construct_encoder<T: Clone + Eq + Hash>(tree: &Tree<T>) -> HashMap<T, Bit
     encoder
 }
 
-pub fn encode_bit<T: Eq + Hash>(encoder: &HashMap<T, BitVec>, source: &Vec<T>) -> BitVec {
-    source.iter().fold(BitVec::new(), |mut acc, token| {
+pub fn encode_bit<T: Eq + Hash>(encoder: &HashMap<T, BitVec>, tokens: &Vec<T>) -> BitVec {
+    tokens.iter().fold(BitVec::new(), |mut acc, token| {
         acc.extend_from_bitslice(encoder.get(token).unwrap().as_bitslice());
         acc
     })
 }
 
-pub fn decode_bit<T: Clone + Eq + Hash>(tree: &Tree<T>, source: &BitVec) -> Vec<T> {
+pub fn decode_bit<T: Clone + Eq + Hash>(tree: &Tree<T>, encoded_message: &BitVec) -> Vec<T> {
     let mut output = Vec::new();
     let mut current_tree = tree.clone();
     let mut i = 0;
 
-    while i < source.len() {
+    while i < encoded_message.len() {
         match current_tree {
             Tree::Leaf { token, .. } => {
                 output.push(token.clone());
                 current_tree = tree.clone();
             }
             Tree::Node { left, right, .. } => {
-                if source[i] {
+                if encoded_message[i] {
                     current_tree = right.as_ref().clone();
                 } else {
                     current_tree = left.as_ref().clone();
@@ -134,4 +142,40 @@ pub fn decode_bit<T: Clone + Eq + Hash>(tree: &Tree<T>, source: &BitVec) -> Vec<
     }
 
     output
+}
+
+pub fn encode<'a, T, TokenExtractor>(message: &'a String, extract_tokens: TokenExtractor) -> Vec<u8>
+where
+    T: Clone + Eq + Hash + Ord + Serialize,
+    TokenExtractor: Fn(&'a str) -> Vec<T>,
+{
+    let tokens = extract_tokens(&message);
+    let freqs = construct_freqs(&tokens);
+    let tree = construct_tree(&freqs);
+    let encoder = construct_encoder(&tree);
+
+    let bits = encode_bit(&encoder, &tokens);
+    let encoded_message = EncodedMessage {
+        freqs: freqs,
+        message: bits,
+    };
+
+    rmp_serde::encode::to_vec(&encoded_message).unwrap()
+}
+
+pub fn decode<
+    'a,
+    T: Clone + Eq + Hash + Deserialize<'a> + Ord,
+    TokensToString: Fn(Vec<T>) -> String,
+>(
+    encoded_message: &'a Vec<u8>,
+    tokens_to_string: TokensToString,
+) -> String {
+    let EncodedMessage {
+        freqs,
+        message: bits,
+    }: EncodedMessage<T> = rmp_serde::decode::from_slice(encoded_message).unwrap();
+
+    let tree = construct_tree(&freqs);
+    tokens_to_string(decode_bit(&tree, &bits))
 }
