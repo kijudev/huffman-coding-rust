@@ -41,9 +41,9 @@ impl<T: Clone + Eq> PartialOrd for Tree<T> {
 }
 
 pub fn construct_freqs<T: Clone + Eq + Hash>(tokens: &Vec<T>) -> HashMap<T, u64> {
-    tokens.iter().fold(HashMap::new(), |mut freqs, t| {
-        *freqs.entry(t.clone()).or_insert(0) += 1;
-        freqs
+    tokens.iter().fold(HashMap::new(), |mut acc, token| {
+        *acc.entry(token.clone()).or_insert(0) += 1;
+        acc
     })
 }
 
@@ -72,7 +72,7 @@ pub fn construct_tree<T: Clone + Eq + Ord>(freqs: &HashMap<T, u64>) -> Tree<T> {
     heap.pop().unwrap().0
 }
 
-pub fn construct_encoder<T: Clone + Eq + Ord + Hash>(tree: &Tree<T>) -> HashMap<T, BitVec> {
+pub fn construct_encoder<T: Clone + Eq + Hash>(tree: &Tree<T>) -> HashMap<T, BitVec> {
     let mut stack: Vec<(&Tree<T>, BitVec)> = vec![(tree, BitVec::new())];
     let mut encoder = HashMap::new();
 
@@ -98,20 +98,14 @@ pub fn construct_encoder<T: Clone + Eq + Ord + Hash>(tree: &Tree<T>) -> HashMap<
     encoder
 }
 
-pub fn encode_bit<T: Clone + Eq + Ord + Hash>(
-    encoder: &HashMap<T, BitVec>,
-    source: &Vec<T>,
-) -> BitVec {
-    let mut output = BitVec::new();
-
-    for token in source {
-        output.extend_from_bitslice(encoder.get(token).unwrap().as_bitslice());
-    }
-
-    output
+pub fn encode_bit<T: Eq + Hash>(encoder: &HashMap<T, BitVec>, source: &Vec<T>) -> BitVec {
+    source.iter().fold(BitVec::new(), |mut acc, token| {
+        acc.extend_from_bitslice(encoder.get(token).unwrap().as_bitslice());
+        acc
+    })
 }
 
-pub fn decode_bit<T: Clone + Eq + Ord + Hash>(tree: &Tree<T>, source: &BitVec) -> Vec<T> {
+pub fn decode_bit<T: Clone + Eq + Hash>(tree: &Tree<T>, source: &BitVec) -> Vec<T> {
     let mut output = Vec::new();
     let mut current_tree = tree.clone();
     let mut i = 0;
