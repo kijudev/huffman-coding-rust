@@ -156,25 +156,58 @@ where
 
     let bits = encode_bit(&encoder, &tokens);
     let encoded_message = EncodedMessage {
-        freqs: freqs,
+        freqs: freqs.clone(),
         message: bits,
     };
 
     rmp_serde::encode::to_vec(&encoded_message).unwrap()
 }
 
-pub fn decode<
-    'a,
-    T: Clone + Eq + Hash + Deserialize<'a> + Ord,
-    TokensToString: Fn(Vec<T>) -> String,
->(
+pub fn encode_with_freqs<'a, T, TokenExtractor>(
+    message: &'a String,
+    extract_tokens: TokenExtractor,
+    freqs: &HashMap<T, u64>,
+) -> Vec<u8>
+where
+    T: Clone + Eq + Hash + Ord + Serialize,
+    TokenExtractor: Fn(&'a str) -> Vec<T>,
+{
+    let tokens = extract_tokens(&message);
+    let tree = construct_tree(&freqs);
+    let encoder = construct_encoder(&tree);
+
+    let bits = encode_bit(&encoder, &tokens);
+
+    rmp_serde::encode::to_vec(&bits).unwrap()
+}
+
+pub fn decode<'a, T, TokensToString>(
     encoded_message: &'a Vec<u8>,
     tokens_to_string: TokensToString,
-) -> String {
+) -> String
+where
+    T: Clone + Eq + Hash + Deserialize<'a> + Ord,
+    TokensToString: Fn(Vec<T>) -> String,
+{
     let EncodedMessage {
         freqs,
         message: bits,
     }: EncodedMessage<T> = rmp_serde::decode::from_slice(encoded_message).unwrap();
+
+    let tree = construct_tree(&freqs);
+    tokens_to_string(decode_bit(&tree, &bits))
+}
+
+pub fn decode_with_freqs<'a, T, TokensToString>(
+    encoded_message: &'a Vec<u8>,
+    tokens_to_string: TokensToString,
+    freqs: &HashMap<T, u64>,
+) -> String
+where
+    T: Clone + Eq + Hash + Deserialize<'a> + Ord,
+    TokensToString: Fn(Vec<T>) -> String,
+{
+    let bits: BitVec = rmp_serde::decode::from_slice(encoded_message).unwrap();
 
     let tree = construct_tree(&freqs);
     tokens_to_string(decode_bit(&tree, &bits))
