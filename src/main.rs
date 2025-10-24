@@ -1,7 +1,6 @@
 use std::{
     fs::{self, File},
     io::{Read, Write},
-    os::fd::AsFd,
     path::PathBuf,
 };
 
